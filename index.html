@@ -1,5 +1,279 @@
 <!DOCTYPE html>
-<html>
-<head><title>Test</title></head>
-<body><h1>Page test GitHub Pages</h1></body>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Stat Match Basket</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 1000px; margin: auto; }
+    h2 { text-align: center; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #aaa; padding: 8px; text-align: center; }
+    tbody tr:nth-child(odd) { background-color: #e6f0ff; }
+    tbody tr:nth-child(even) { background-color: #ffffff; }
+    input[type="text"], select, input[type="number"] {
+      padding: 6px; margin: 4px 0; width: 100%; box-sizing: border-box;
+    }
+    button { padding: 6px 12px; margin: 8px 4px; cursor: pointer; }
+    #players-list { margin-top: 10px; }
+    .stat-value { font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h2>Stat Match Basket</h2>
+
+  <div>
+    <label>Ajouter une joueuse : </label>
+    <input type="text" id="player-name" placeholder="Nom de la joueuse" />
+    <button id="add-player-btn">+ Ajouter</button>
+  </div>
+
+  <div id="players-list"></div>
+
+  <div style="margin-top:15px;">
+    <button id="create-table-btn">OK - Créer le tableau</button>
+  </div>
+
+  <div style="margin-top:20px;">
+    <label for="quarter-select">Choisir un quart-temps :</label>
+    <select id="quarter-select" disabled>
+      <option value="QT1">1er Quart-temps</option>
+      <option value="QT2">2ème Quart-temps</option>
+      <option value="QT3">3ème Quart-temps</option>
+      <option value="QT4">4ème Quart-temps</option>
+    </select>
+  </div>
+
+  <div style="margin-top:10px;">
+    <label>Date du match : </label>
+    <input type="date" id="match-date" />
+  </div>
+
+  <div style="margin-top:10px;">
+    <label>Lieu : </label>
+    <select id="match-location">
+      <option value="domicile">Domicile</option>
+      <option value="extérieur">Extérieur</option>
+    </select>
+  </div>
+
+  <div style="margin-top:10px;">
+    <label>Adversaire : </label>
+    <input type="text" id="match-opponent" placeholder="Nom de l'adversaire" />
+  </div>
+
+  <div id="table-container"></div>
+
+  <button id="export-btn" style="display:none; margin-top: 15px;">📤 Exporter en CSV</button>
+
+  <script>
+    const stats = [
+      "Points",
+      "Tir Tenté", "Tir réussi",
+      "3PT tenté", "3PT réussi",
+      "Passe D",
+      "Rebond offensif",
+      "Rebond défensif",
+      "Interception",
+      "Contre",
+      "Ballon perdu",
+      "Faute commise",
+      "Faute provoquée",
+      "Lancer franc Tenté",
+      "Lancer franc réussi"
+    ];
+
+    let players = [];
+
+    const playersListDiv = document.getElementById("players-list");
+    const playerNameInput = document.getElementById("player-name");
+    const addPlayerBtn = document.getElementById("add-player-btn");
+    const createTableBtn = document.getElementById("create-table-btn");
+    const quarterSelect = document.getElementById("quarter-select");
+    const tableContainer = document.getElementById("table-container");
+    const exportBtn = document.getElementById("export-btn");
+
+    addPlayerBtn.onclick = () => {
+      const name = playerNameInput.value.trim();
+      if (name && !players.includes(name)) {
+        players.push(name);
+        updatePlayersList();
+        playerNameInput.value = "";
+      }
+    };
+
+    function updatePlayersList() {
+      playersListDiv.innerHTML = "";
+      players.forEach((p, i) => {
+        const span = document.createElement("span");
+        span.textContent = p + " ";
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "x";
+        delBtn.style.marginLeft = "5px";
+        delBtn.onclick = () => {
+          players.splice(i,1);
+          updatePlayersList();
+        };
+        span.appendChild(delBtn);
+        playersListDiv.appendChild(span);
+      });
+    }
+
+    createTableBtn.onclick = () => {
+      if (players.length === 0) {
+        alert("Ajoute au moins une joueuse !");
+        return;
+      }
+      generateTable(players);
+      quarterSelect.disabled = false;
+      exportBtn.style.display = "inline-block";
+    };
+
+    function generateTable(players) {
+      tableContainer.innerHTML = "";
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headRow = document.createElement("tr");
+
+      // En-tête
+      headRow.innerHTML = stats.map(s => `<th>${s}</th>`).join("");
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+
+      players.forEach(player => {
+        const row = document.createElement("tr");
+        // Colonne Points (calculée)
+        const pointsCell = document.createElement("td");
+        pointsCell.innerText = "0";
+        pointsCell.className = "stat-value";
+        row.appendChild(pointsCell);
+
+        // Les autres stats
+        stats.slice(1).forEach(stat => {
+          const cell = document.createElement("td");
+          const span = document.createElement("span");
+          span.innerText = "0";
+          span.className = "stat-value";
+          cell.appendChild(span);
+          cell.appendChild(document.createElement("br"));
+
+          const btn = document.createElement("button");
+          btn.innerText = "+1";
+
+          btn.onclick = () => {
+            // Incrémente la stat courante
+            span.innerText = parseInt(span.innerText) + 1;
+
+            // Si c'est une stat 'réussi', on incrémente aussi la colonne 'Tenté' correspondante
+            if (stat.includes("réussi")) {
+              // Trouver la stat 'Tenté' correspondante
+              let tentativeStat = stat.replace("réussi", "Tenté");
+
+              // Trouver l'index de cette stat dans stats ( +1 car points en 1ere colonne)
+              const tentativeIndex = stats.indexOf(tentativeStat);
+
+              if (tentativeIndex !== -1) {
+                // Récupérer la cellule correspondante dans la même ligne
+                const tentativeCell = row.children[tentativeIndex];
+                const tentativeSpan = tentativeCell.querySelector(".stat-value");
+                tentativeSpan.innerText = parseInt(tentativeSpan.innerText) + 1;
+              }
+            }
+
+            // Mettre à jour les points
+            updatePoints(row);
+          };
+
+          cell.appendChild(btn);
+          row.appendChild(cell);
+        });
+
+        tbody.appendChild(row);
+      });
+
+      // Ligne total (somme)
+      const totalRow = document.createElement("tr");
+      totalRow.style.fontWeight = "bold";
+      totalRow.style.backgroundColor = "#cce5ff";
+
+      // Cellule total "Points" 
+      const totalPointsCell = document.createElement("td");
+      totalPointsCell.innerText = "Total";
+      totalRow.appendChild(totalPointsCell);
+
+      // Somme des colonnes
+      for(let i=1; i<stats.length; i++) {
+        const totalCell = document.createElement("td");
+        totalCell.innerText = "0";
+        totalCell.className = "stat-value";
+        totalRow.appendChild(totalCell);
+      }
+      tbody.appendChild(totalRow);
+
+      table.appendChild(tbody);
+      tableContainer.appendChild(table);
+
+      // Met à jour les totaux chaque fois qu'une valeur change
+      function updateTotals() {
+        for(let col=1; col<stats.length; col++) {
+          let sum = 0;
+          tbody.querySelectorAll("tr").forEach((tr, idx) => {
+            if(idx === tbody.children.length -1) return; // ignorer la ligne total
+            const val = parseInt(tr.children[col].querySelector(".stat-value").innerText);
+            sum += val;
+          });
+          totalRow.children[col].innerText = sum;
+        }
+      }
+
+      // Met à jour les points pour une ligne donnée (joueur)
+      function updatePoints(row) {
+        const tirReussi = parseInt(row.children[stats.indexOf("Tir réussi")].querySelector(".stat-value").innerText);
+        const pt3Reussi = parseInt(row.children[stats.indexOf("3PT réussi")].querySelector(".stat-value").innerText);
+        const lancerFrancReussi = parseInt(row.children[stats.indexOf("Lancer franc réussi")].querySelector(".stat-value").innerText);
+        const points = tirReussi * 2 + pt3Reussi * 3 + lancerFrancReussi;
+        row.children[0].innerText = points;
+        updateTotals();
+      }
+    }
+
+    // Export CSV
+    exportBtn.onclick = () => {
+      const table = tableContainer.querySelector("table");
+      if (!table) return alert("Crée d'abord le tableau !");
+
+      const rows = [];
+      const headers = Array.from(table.querySelectorAll("thead th")).map(th => th.innerText);
+      rows.push(headers.join(","));
+
+      const trs = table.querySelectorAll("tbody tr");
+      trs.forEach((tr, idx) => {
+        // On ignore la dernière ligne total dans l'export détaillé des joueurs
+        if (idx === trs.length - 1) return;
+
+        const values = Array.from(tr.children).map(td => {
+          return td.innerText;
+        });
+        rows.push(values.join(","));
+      });
+
+      // Ajouter la ligne total à la fin aussi
+      const totalRow = trs[trs.length - 1];
+      const totalValues = Array.from(totalRow.children).map(td => td.innerText);
+      rows.push(totalValues.join(","));
+
+      const csvContent = "data:text/csv;charset=utf-8," + rows.join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "stats_basket.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+  </script>
+</body>
 </html>
