@@ -1,0 +1,308 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stat Match Basket</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 10px;
+      margin: 0;
+      background-color: #f9f9f9;
+    }
+    h2, h3 {
+      text-align: center;
+    }
+    .hidden {
+      display: none;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      display: block;
+      overflow-x: auto;
+    }
+    th, td {
+      border: 1px solid #aaa;
+      padding: 6px;
+      text-align: center;
+      font-size: 14px;
+    }
+    tr:nth-child(even) {
+      background-color: #e6f0ff;
+    }
+    tr:nth-child(odd) {
+      background-color: #ffffff;
+    }
+    input, select, button {
+      width: 100%;
+      max-width: 300px;
+      padding: 8px;
+      margin: 5px auto;
+      display: block;
+      box-sizing: border-box;
+      font-size: 16px;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    ul#player-list {
+      padding: 0;
+      list-style: none;
+    }
+    ul#player-list li {
+      background: #e3e3e3;
+      padding: 5px 10px;
+      margin: 2px 0;
+      border-radius: 4px;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background-color: #121212; color: #e0e0e0; }
+      table, th, td { border-color: #555; }
+      tr:nth-child(even) { background-color: #1e1e2f; }
+      tr:nth-child(odd) { background-color: #151524; }
+      input, select, button { background-color: #333; color: white; border: 1px solid #555; }
+      ul#player-list li { background: #2a2a2a; }
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Stat Match Basket</h2>
+
+  <div id="start-menu">
+    <button onclick="startNewMatch()">🆕 Nouveau Match</button>
+    <button onclick="document.getElementById('load-section').classList.remove('hidden')">📂 Reprendre un Match</button>
+  </div>
+
+  <div id="load-section" class="hidden">
+    <input type="file" id="load-file" accept=".json">
+    <button onclick="loadMatch()">📥 Charger</button>
+  </div>
+
+  <div id="setup-section" class="hidden">
+    <h3>Configuration du Match</h3>
+    <input type="text" id="match-date" placeholder="Date (ex: 2025-07-31)">
+    <input type="text" id="match-location" placeholder="Lieu (domicile ou extérieur)">
+    <input type="text" id="match-opponent" placeholder="Adversaire">
+
+    <h3>Joueuses</h3>
+    <ul id="player-list"></ul>
+    <input type="text" id="player-name" placeholder="Nom de la joueuse">
+    <button onclick="addPlayer()">➕ Ajouter une joueuse</button>
+    <button onclick="generateMatchTables()">✅ OK</button>
+  </div>
+
+  <div id="match-section" class="hidden">
+    <h3 id="match-info"></h3>
+    <label for="quarter-select">Quart-temps :</label>
+    <select id="quarter-select" onchange="renderTable()">
+      <option value="Q1">Q1</option>
+      <option value="Q2">Q2</option>
+      <option value="Q3">Q3</option>
+      <option value="Q4">Q4</option>
+    </select>
+
+    <div id="table-container"></div>
+
+    <button onclick="exportCSV()">📤 Export CSV</button>
+    <button onclick="saveMatch()">💾 Sauvegarder (JSON)</button>
+
+    <h3>Tableau Récapitulatif</h3>
+    <div id="summary-table"></div>
+  </div>
+
+  <script>
+    const stats = [
+      "Points",
+      "Tir Tenté", "Tir réussi",
+      "3PT tenté", "3PT réussi",
+      "Passe D", "Rebond offensif", "Rebond défensif",
+      "Interception", "Contre",
+      "Ballon perdu",
+      "Faute commise", "Faute provoquée",
+      "Lancer franc Tenté", "Lancer franc réussi"
+    ];
+
+    let players = [];
+    let matchData = {
+      meta: {},
+      data: {
+        Q1: {}, Q2: {}, Q3: {}, Q4: {}
+      }
+    };
+
+    function startNewMatch() {
+      document.getElementById('start-menu').classList.add('hidden');
+      document.getElementById('setup-section').classList.remove('hidden');
+    }
+
+    function addPlayer() {
+      const nameInput = document.getElementById('player-name');
+      const name = nameInput.value.trim();
+      if (name && !players.includes(name)) {
+        players.push(name);
+        const li = document.createElement("li");
+        li.textContent = name;
+        document.getElementById("player-list").appendChild(li);
+        nameInput.value = "";
+      }
+    }
+
+    function generateMatchTables() {
+      matchData.meta.date = document.getElementById("match-date").value;
+      matchData.meta.location = document.getElementById("match-location").value;
+      matchData.meta.opponent = document.getElementById("match-opponent").value;
+      matchData.meta.players = players;
+
+      players.forEach(player => {
+        ["Q1","Q2","Q3","Q4"].forEach(q => {
+          matchData.data[q][player] = {};
+          stats.forEach(stat => matchData.data[q][player][stat] = 0);
+        });
+      });
+
+      document.getElementById('setup-section').classList.add('hidden');
+      document.getElementById('match-section').classList.remove('hidden');
+
+      document.getElementById('match-info').innerText =
+        `${matchData.meta.date} - ${matchData.meta.location} vs ${matchData.meta.opponent}`;
+      renderTable();
+    }
+
+    function renderTable() {
+      const quarter = document.getElementById("quarter-select").value;
+      const container = document.getElementById("table-container");
+      container.innerHTML = "";
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headRow = document.createElement("tr");
+      headRow.innerHTML = "<th>Joueuse</th>" + stats.map(s => `<th>${s}</th>`).join("");
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+      players.forEach(player => {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${player}</td>`;
+        stats.forEach(stat => {
+          const cell = document.createElement("td");
+          const span = document.createElement("span");
+          span.innerText = matchData.data[quarter][player][stat];
+          span.className = "stat-value";
+
+          const btn = document.createElement("button");
+          btn.innerText = "+1";
+          btn.onclick = () => {
+            matchData.data[quarter][player][stat]++;
+            if (stat === "Tir réussi") matchData.data[quarter][player]["Points"] += 2;
+            if (stat === "3PT réussi") matchData.data[quarter][player]["Points"] += 3;
+            if (stat === "Lancer franc réussi") matchData.data[quarter][player]["Points"] += 1;
+            renderTable();
+            renderSummary();
+          };
+
+          cell.appendChild(span);
+          cell.appendChild(document.createElement("br"));
+          cell.appendChild(btn);
+          row.appendChild(cell);
+        });
+        tbody.appendChild(row);
+      });
+
+      table.appendChild(tbody);
+      container.appendChild(table);
+      renderSummary();
+    }
+
+    function renderSummary() {
+      const summary = {};
+      players.forEach(p => summary[p] = {});
+      stats.forEach(stat => {
+        players.forEach(p => {
+          summary[p][stat] = ["Q1","Q2","Q3","Q4"].reduce((acc, q) => acc + matchData.data[q][p][stat], 0);
+        });
+      });
+
+      const container = document.getElementById("summary-table");
+      container.innerHTML = "";
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headRow = document.createElement("tr");
+      headRow.innerHTML = "<th>Joueuse</th>" + stats.map(s => `<th>${s}</th>`).join("");
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+      players.forEach(p => {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${p}</td>` + stats.map(stat => `<td>${summary[p][stat]}</td>`).join("");
+        tbody.appendChild(row);
+      });
+
+      // Ligne total
+      const totalRow = document.createElement("tr");
+      totalRow.innerHTML = "<td><b>Total</b></td>" + stats.map(stat => {
+        const total = players.reduce((acc, p) => acc + summary[p][stat], 0);
+        return `<td><b>${total}</b></td>`;
+      }).join("");
+      tbody.appendChild(totalRow);
+
+      table.appendChild(tbody);
+      container.appendChild(table);
+    }
+
+    function exportCSV() {
+      let csv = "Quart,Joueuse," + stats.join(",") + "\n";
+      ["Q1","Q2","Q3","Q4"].forEach(q => {
+        players.forEach(p => {
+          const row = [q, p].concat(stats.map(stat => matchData.data[q][p][stat]));
+          csv += row.join(",") + "\n";
+        });
+      });
+      const blob = new Blob([csv], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "stats_match.csv";
+      a.click();
+    }
+
+    function saveMatch() {
+      const filename = prompt("Nom du fichier (ex: match_Q2_3min.json) :") || "match_sauvegarde.json";
+      const blob = new Blob([JSON.stringify(matchData)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+    }
+
+    function loadMatch() {
+      const fileInput = document.getElementById("load-file");
+      const file = fileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        matchData = JSON.parse(e.target.result);
+        players = matchData.meta.players;
+        document.getElementById('start-menu').classList.add('hidden');
+        document.getElementById('load-section').classList.add('hidden');
+        document.getElementById('match-section').classList.remove('hidden');
+        document.getElementById('match-info').innerText =
+          `${matchData.meta.date} - ${matchData.meta.location} vs ${matchData.meta.opponent}`;
+        renderTable();
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
