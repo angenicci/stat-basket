@@ -1,191 +1,158 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Stat Match Basket</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; max-width: 1000px; margin: auto; }
-    h2 { text-align: center; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #aaa; padding: 8px; text-align: center; }
-    tbody tr:nth-child(odd) { background-color: #e6f0ff; }
-    tbody tr:nth-child(even) { background-color: #ffffff; }
-    input[type="text"], select, input[type="number"] {
-      padding: 6px; margin: 4px 0; width: 100%; box-sizing: border-box;
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 1000px;
+      margin: auto;
     }
-    button { padding: 6px 12px; margin: 8px 4px; cursor: pointer; }
-    #players-list { margin-top: 10px; }
-    .stat-value { font-weight: bold; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: center;
+    }
+    tr:nth-child(even) {
+      background-color: #f0f8ff;
+    }
+    tr:nth-child(odd) {
+      background-color: #ffffff;
+    }
+    input, select, button {
+      margin: 5px 0;
+    }
+    .stat-value {
+      display: inline-block;
+      min-width: 20px;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    @media screen and (max-width: 768px) {
+      table, thead, tbody, th, td, tr {
+        font-size: 12px;
+      }
+    }
   </style>
 </head>
 <body>
 
-  <h2>Stat Match Basket</h2>
+  <h1>Stat Match Basket</h1>
 
-  <div>
-    <label>Ajouter une joueuse : </label>
-    <input type="text" id="player-name" placeholder="Nom de la joueuse" />
-    <button id="add-player-btn">+ Ajouter</button>
-  </div>
-
-  <div id="players-list"></div>
-
-  <div style="margin-top:15px;">
-    <button id="create-table-btn">OK - Créer le tableau</button>
-  </div>
-
-  <div style="margin-top:20px;">
-    <label for="quarter-select">Choisir un quart-temps :</label>
-    <select id="quarter-select" disabled>
-      <option value="QT1">1er Quart-temps</option>
-      <option value="QT2">2ème Quart-temps</option>
-      <option value="QT3">3ème Quart-temps</option>
-      <option value="QT4">4ème Quart-temps</option>
+  <div class="section">
+    <label for="match-date">Date du match :</label>
+    <input type="date" id="match-date">
+    <label for="lieu">Lieu :</label>
+    <select id="lieu">
+      <option value="Domicile">Domicile</option>
+      <option value="Extérieur">Extérieur</option>
     </select>
+    <label for="adversaire">Adversaire :</label>
+    <input type="text" id="adversaire" placeholder="Nom de l'adversaire">
   </div>
 
-  <div style="margin-top:10px;">
-    <label>Date du match : </label>
-    <input type="date" id="match-date" />
+  <div class="section">
+    <label>Nom de la joueuse :</label>
+    <input type="text" id="player-name">
+    <button onclick="addPlayer()">+ Ajouter</button>
+    <button onclick="validatePlayers()">✅ OK</button>
   </div>
 
-  <div style="margin-top:10px;">
-    <label>Lieu : </label>
-    <select id="match-location">
-      <option value="domicile">Domicile</option>
-      <option value="extérieur">Extérieur</option>
+  <div class="section" id="quart-container" style="display:none;">
+    <label for="quart">Sélection du quart-temps :</label>
+    <select id="quart">
+      <option value="Q1">1er Quart</option>
+      <option value="Q2">2e Quart</option>
+      <option value="Q3">3e Quart</option>
+      <option value="Q4">4e Quart</option>
     </select>
-  </div>
-
-  <div style="margin-top:10px;">
-    <label>Adversaire : </label>
-    <input type="text" id="match-opponent" placeholder="Nom de l'adversaire" />
   </div>
 
   <div id="table-container"></div>
-
-  <button id="export-btn" style="display:none; margin-top: 15px;">📤 Exporter en CSV</button>
+  <button onclick="exportCSV()" style="display:none;" id="export-btn">📤 Exporter en CSV</button>
+  <button onclick="saveJSON()" style="display:none;" id="save-btn">💾 Sauvegarder en JSON</button>
 
   <script>
     const stats = [
       "Points",
       "Tir Tenté", "Tir réussi",
       "3PT tenté", "3PT réussi",
-      "Passe D",
-      "Rebond offensif",
-      "Rebond défensif",
-      "Interception",
-      "Contre",
-      "Ballon perdu",
-      "Faute commise",
-      "Faute provoquée",
-      "Lancer franc Tenté",
-      "Lancer franc réussi"
+      "Lancer franc Tenté", "Lancer franc réussi",
+      "Passe D", "Rebond offensif", "Rebond défensif",
+      "Interception", "Contre", "Ballon perdu",
+      "Faute commise", "Faute provoquée"
     ];
 
     let players = [];
 
-    const playersListDiv = document.getElementById("players-list");
-    const playerNameInput = document.getElementById("player-name");
-    const addPlayerBtn = document.getElementById("add-player-btn");
-    const createTableBtn = document.getElementById("create-table-btn");
-    const quarterSelect = document.getElementById("quarter-select");
-    const tableContainer = document.getElementById("table-container");
-    const exportBtn = document.getElementById("export-btn");
-
-    addPlayerBtn.onclick = () => {
-      const name = playerNameInput.value.trim();
-      if (name && !players.includes(name)) {
+    function addPlayer() {
+      const nameInput = document.getElementById("player-name");
+      const name = nameInput.value.trim();
+      if (name) {
         players.push(name);
-        updatePlayersList();
-        playerNameInput.value = "";
+        nameInput.value = "";
+        alert(`Joueuse ajoutée : ${name}`);
       }
-    };
-
-    function updatePlayersList() {
-      playersListDiv.innerHTML = "";
-      players.forEach((p, i) => {
-        const span = document.createElement("span");
-        span.textContent = p + " ";
-        const delBtn = document.createElement("button");
-        delBtn.textContent = "x";
-        delBtn.style.marginLeft = "5px";
-        delBtn.onclick = () => {
-          players.splice(i,1);
-          updatePlayersList();
-        };
-        span.appendChild(delBtn);
-        playersListDiv.appendChild(span);
-      });
     }
 
-    createTableBtn.onclick = () => {
+    function validatePlayers() {
       if (players.length === 0) {
-        alert("Ajoute au moins une joueuse !");
+        alert("Ajoute au moins une joueuse.");
         return;
       }
+      document.getElementById("quart-container").style.display = "block";
       generateTable(players);
-      quarterSelect.disabled = false;
-      exportBtn.style.display = "inline-block";
-    };
+      document.getElementById("export-btn").style.display = "inline-block";
+      document.getElementById("save-btn").style.display = "inline-block";
+    }
 
     function generateTable(players) {
-      tableContainer.innerHTML = "";
+      const container = document.getElementById("table-container");
+      container.innerHTML = "";
       const table = document.createElement("table");
-      const thead = document.createElement("thead");
-      const headRow = document.createElement("tr");
 
-      // En-tête
-      headRow.innerHTML = stats.map(s => `<th>${s}</th>`).join("");
-      thead.appendChild(headRow);
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      headerRow.innerHTML = `<th>Joueuse</th>` + stats.map(s => `<th>${s}</th>`).join("");
+      thead.appendChild(headerRow);
       table.appendChild(thead);
 
       const tbody = document.createElement("tbody");
-
       players.forEach(player => {
         const row = document.createElement("tr");
-        // Colonne Points (calculée)
-        const pointsCell = document.createElement("td");
-        pointsCell.innerText = "0";
-        pointsCell.className = "stat-value";
-        row.appendChild(pointsCell);
+        row.innerHTML = `<td>${player}</td>`;
 
-        // Les autres stats
-        stats.slice(1).forEach(stat => {
+        const cells = {};
+        stats.forEach(stat => {
           const cell = document.createElement("td");
+
           const span = document.createElement("span");
-          span.innerText = "0";
           span.className = "stat-value";
-          cell.appendChild(span);
-          cell.appendChild(document.createElement("br"));
+          span.innerText = "0";
+          cells[stat] = span;
 
           const btn = document.createElement("button");
-          btn.innerText = "+1";
-
+          btn.textContent = "+1";
           btn.onclick = () => {
-            // Incrémente la stat courante
             span.innerText = parseInt(span.innerText) + 1;
 
-            // Si c'est une stat 'réussi', on incrémente aussi la colonne 'Tenté' correspondante
-            if (stat.includes("réussi")) {
-              // Trouver la stat 'Tenté' correspondante
-              let tentativeStat = stat.replace("réussi", "Tenté");
+            if (stat === "Tir réussi") updateLinked(cells, "Tir Tenté");
+            if (stat === "3PT réussi") updateLinked(cells, "3PT tenté");
+            if (stat === "Lancer franc réussi") updateLinked(cells, "Lancer franc Tenté");
 
-              // Trouver l'index de cette stat dans stats ( +1 car points en 1ere colonne)
-              const tentativeIndex = stats.indexOf(tentativeStat);
-
-              if (tentativeIndex !== -1) {
-                // Récupérer la cellule correspondante dans la même ligne
-                const tentativeCell = row.children[tentativeIndex];
-                const tentativeSpan = tentativeCell.querySelector(".stat-value");
-                tentativeSpan.innerText = parseInt(tentativeSpan.innerText) + 1;
-              }
-            }
-
-            // Mettre à jour les points
-            updatePoints(row);
+            updatePoints(cells);
           };
 
+          cell.appendChild(span);
+          cell.appendChild(document.createElement("br"));
           cell.appendChild(btn);
           row.appendChild(cell);
         });
@@ -193,87 +160,71 @@
         tbody.appendChild(row);
       });
 
-      // Ligne total (somme)
-      const totalRow = document.createElement("tr");
-      totalRow.style.fontWeight = "bold";
-      totalRow.style.backgroundColor = "#cce5ff";
-
-      // Cellule total "Points" 
-      const totalPointsCell = document.createElement("td");
-      totalPointsCell.innerText = "Total";
-      totalRow.appendChild(totalPointsCell);
-
-      // Somme des colonnes
-      for(let i=1; i<stats.length; i++) {
-        const totalCell = document.createElement("td");
-        totalCell.innerText = "0";
-        totalCell.className = "stat-value";
-        totalRow.appendChild(totalCell);
-      }
-      tbody.appendChild(totalRow);
-
       table.appendChild(tbody);
-      tableContainer.appendChild(table);
+      container.appendChild(table);
+    }
 
-      // Met à jour les totaux chaque fois qu'une valeur change
-      function updateTotals() {
-        for(let col=1; col<stats.length; col++) {
-          let sum = 0;
-          tbody.querySelectorAll("tr").forEach((tr, idx) => {
-            if(idx === tbody.children.length -1) return; // ignorer la ligne total
-            const val = parseInt(tr.children[col].querySelector(".stat-value").innerText);
-            sum += val;
-          });
-          totalRow.children[col].innerText = sum;
-        }
-      }
-
-      // Met à jour les points pour une ligne donnée (joueur)
-      function updatePoints(row) {
-        const tirReussi = parseInt(row.children[stats.indexOf("Tir réussi")].querySelector(".stat-value").innerText);
-        const pt3Reussi = parseInt(row.children[stats.indexOf("3PT réussi")].querySelector(".stat-value").innerText);
-        const lancerFrancReussi = parseInt(row.children[stats.indexOf("Lancer franc réussi")].querySelector(".stat-value").innerText);
-        const points = tirReussi * 2 + pt3Reussi * 3 + lancerFrancReussi;
-        row.children[0].innerText = points;
-        updateTotals();
+    function updateLinked(cells, relatedStat) {
+      const span = cells[relatedStat];
+      if (span) {
+        span.innerText = parseInt(span.innerText) + 1;
       }
     }
 
-    // Export CSV
-    exportBtn.onclick = () => {
-      const table = tableContainer.querySelector("table");
-      if (!table) return alert("Crée d'abord le tableau !");
+    function updatePoints(cells) {
+      const tir2 = parseInt(cells["Tir réussi"].innerText);
+      const tir3 = parseInt(cells["3PT réussi"].innerText);
+      const lf = parseInt(cells["Lancer franc réussi"].innerText);
+      const total = (tir2 * 2) + (tir3 * 3) + lf;
+      cells["Points"].innerText = total;
+    }
 
+    function exportCSV() {
       const rows = [];
+      const table = document.querySelector("table");
       const headers = Array.from(table.querySelectorAll("thead th")).map(th => th.innerText);
       rows.push(headers.join(","));
 
       const trs = table.querySelectorAll("tbody tr");
-      trs.forEach((tr, idx) => {
-        // On ignore la dernière ligne total dans l'export détaillé des joueurs
-        if (idx === trs.length - 1) return;
-
-        const values = Array.from(tr.children).map(td => {
-          return td.innerText;
+      trs.forEach(tr => {
+        const values = Array.from(tr.querySelectorAll("td")).map(td => {
+          const span = td.querySelector(".stat-value");
+          return span ? span.innerText : td.innerText;
         });
         rows.push(values.join(","));
       });
 
-      // Ajouter la ligne total à la fin aussi
-      const totalRow = trs[trs.length - 1];
-      const totalValues = Array.from(totalRow.children).map(td => td.innerText);
-      rows.push(totalValues.join(","));
-
-      const csvContent = "data:text/csv;charset=utf-8," + rows.join("\n");
-      const encodedUri = encodeURI(csvContent);
+      const csvContent = rows.join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "stats_basket.csv");
-      document.body.appendChild(link);
+      link.href = URL.createObjectURL(blob);
+      link.download = "stat_match_basket.csv";
       link.click();
-      document.body.removeChild(link);
-    };
+    }
 
+    function saveJSON() {
+      const data = {
+        date: document.getElementById("match-date").value,
+        lieu: document.getElementById("lieu").value,
+        adversaire: document.getElementById("adversaire").value,
+        quart: document.getElementById("quart").value,
+        stats: []
+      };
+      const trs = document.querySelectorAll("tbody tr");
+      trs.forEach(tr => {
+        const tds = tr.querySelectorAll("td");
+        const player = tds[0].innerText;
+        const values = Array.from(tds).slice(1).map(td => td.querySelector(".stat-value").innerText);
+        data.stats.push({ joueur: player, stats: values });
+      });
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "match_basket.json";
+      link.click();
+    }
   </script>
+
 </body>
 </html>
